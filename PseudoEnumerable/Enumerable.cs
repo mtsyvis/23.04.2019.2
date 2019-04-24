@@ -21,16 +21,18 @@ namespace PseudoEnumerable
         public static IEnumerable<TSource> Filter<TSource>(this IEnumerable<TSource> source,
             Func<TSource, bool> predicate)
         {
-            if (predicate is null)
-            {
-                yield break;
-            }
+            ValidateArgument(source, predicate);
 
-            foreach (var item in source)
+            return FilterIterator();
+
+            IEnumerable<TSource> FilterIterator()
             {
-                if (predicate(item))
+                foreach (var item in source)
                 {
-                    yield return item;
+                    if (predicate(item))
+                    {
+                        yield return item;
+                    }
                 }
             }
         }
@@ -51,7 +53,17 @@ namespace PseudoEnumerable
         public static IEnumerable<TResult> Transform<TSource, TResult>(this IEnumerable<TSource> source,
             Func<TSource, TResult> transformer)
         {
-            throw new NotImplementedException();
+            ValidateArgument(source, transformer);
+
+            return TransformIterator();
+
+            IEnumerable<TResult> TransformIterator()
+            {
+                foreach (var item in source)
+                {
+                    yield return transformer(item);
+                }
+            }
         }
 
         /// <summary>
@@ -69,7 +81,22 @@ namespace PseudoEnumerable
         public static IEnumerable<TSource> SortBy<TSource, TKey>(this IEnumerable<TSource> source,
             Func<TSource, TKey> key)
         {
-            throw new NotImplementedException();
+            ValidateArgument(source, key);
+
+            TSource[] buffer = source.ToArray();
+            TKey[] keys = source.GetKeys(key);
+
+            Array.Sort(keys, buffer);
+
+            return buffer;
+
+            //IEnumerable<TKey> GetKeysIterator()
+            //{
+            //    foreach (var item in source)
+            //    {
+            //        yield return key.Invoke(item);
+            //    }
+            //}
         }
 
         /// <summary>
@@ -104,7 +131,25 @@ namespace PseudoEnumerable
         /// <exception cref="InvalidCastException">An element in the sequence cannot be cast to type TResult.</exception>
         public static IEnumerable<TResult> CastTo<TResult>(IEnumerable source)
         {
-            throw new NotImplementedException();
+            if (source is IEnumerable<TResult> resultSource)
+            {
+                return resultSource;
+            }
+
+            if (source is null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            return CastToIterator();
+
+            IEnumerable<TResult> CastToIterator()
+            {
+                foreach (var item in source)
+                {
+                    yield return (TResult)item;
+                }
+            }
         }
 
         /// <summary>
@@ -121,6 +166,7 @@ namespace PseudoEnumerable
         /// <exception cref="ArgumentNullException">Throws if <paramref name="predicate"/> is null.</exception>
         public static bool ForAll<TSource>(this IEnumerable<TSource> source, Func<TSource, bool> predicate)
         {
+            ValidateArgument(source, predicate);
             foreach (var item in source)
             {
                 if (!predicate.Invoke(item))
@@ -130,6 +176,104 @@ namespace PseudoEnumerable
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Generates the sequence.
+        /// </summary>
+        /// <param name="start">The start.</param>
+        /// <param name="count">The count.</param>
+        /// <returns>Generated sequence</returns>
+        /// <exception cref="ArgumentOutOfRangeException">count or start less then 0</exception>
+        public static IEnumerable<int> GenerateSequence(int start, int count)
+        {
+            if (start < 0 || count < 0)
+            {
+                throw new ArgumentOutOfRangeException($"{nameof(count)} or {nameof(start)} less then 0");
+            }
+
+            return GenerateSequenceIterator();
+
+            IEnumerable<int> GenerateSequenceIterator()
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    yield return start++;
+                }
+            }
+        }
+
+        private static void ValidateArgument(IEnumerable source, Delegate @delegate)
+        {
+            if (source is null)
+            {
+                throw new ArgumentNullException($"{nameof(source)} is null");
+            }
+
+            if (@delegate is null)
+            {
+                throw new ArgumentNullException($"{nameof(@delegate)} is null");
+            }
+        }
+
+        private static TKey[] GetKeys<TSource, TKey>(
+            this IEnumerable<TSource> source,
+            Func<TSource, TKey> keySelector)
+        {
+            var keyList = new List<TKey>(source.Count());
+            foreach (var item in source)
+            {
+                keyList.Add(keySelector(item));
+            }
+
+            return keyList.ToArray();
+        }
+
+        private static TElement[] ToArray<TElement>(this IEnumerable<TElement> source)
+        {
+            if (source is null)
+            {
+                throw new ArgumentNullException($"{nameof(source)}");
+            }
+
+            TElement[] array = null;
+
+            if (source is ICollection<TElement> elements)
+            {
+                array = new TElement[elements.Count];
+                elements.CopyTo(array, 0);
+                return array;
+            }
+            else
+            {
+                var tempArray = new TElement[source.Count()];
+                int i = 0;
+                foreach (var element in source)
+                {
+                    tempArray[i] = element;
+                    i++;
+                }
+
+                array = new TElement[source.Count()];
+                Array.Copy(tempArray, array, tempArray.Length);
+                return array;
+            }
+        }
+
+        private static int Count<TSource>(this IEnumerable<TSource> source)
+        {
+            if (source is null)
+            {
+                throw new ArgumentNullException($"{nameof(source)}");
+            }
+
+            int count = 0;
+            while (source.GetEnumerator().MoveNext())
+            {
+                count++;
+            }
+
+            return count;
         }
     }
 }
