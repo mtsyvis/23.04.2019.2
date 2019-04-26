@@ -5,8 +5,6 @@ using System.Collections;
 
 namespace PseudoEnumerable.Tests
 {
-    using System.Security.Cryptography.X509Certificates;
-
     [TestFixture]
     public class EnumerableTests
     {
@@ -114,24 +112,56 @@ namespace PseudoEnumerable.Tests
 
         #region SortBy key
 
+        [TestCase(arg: new int[] { 2, 4, 6, 6, 2, 3, 7 }, ExpectedResult = new int[] { 2, 2, 3, 4, 6, 6, 7 })]
+        [TestCase(
+            new int[] { -3, int.MinValue, int.MaxValue, 100, 0 },
+            ExpectedResult = new int[] { int.MinValue, -3, 0, 100, int.MaxValue })]
+        [TestCase(new int[] { }, ExpectedResult = new int[] { })]
+        public IEnumerable<int> SortByTest_IntArrayByOneselfAscending(IEnumerable<int> source) => source.SortBy(x => x);
+
+        [TestCase(arg: new int[] { 4, 5, 2, 3, 7 }, ExpectedResult = new int[] { 5, 3, 7, 4, 2 })]
+        [TestCase(arg: new int[] { 5, 6, 6, 5 }, ExpectedResult = new int[] { 5, 5, 6, 6 })]
+        public IEnumerable<int> SortByTest_EvenNumberAscending(IEnumerable<int> source) => source.SortBy(x => x % 2 == 0);
+
+        [TestCase(
+            arg: new string[] { "ccc", "bbb", "nnn", "aaa" },
+            ExpectedResult = new string[] { "nnn", "ccc", "bbb", "aaa" })]
+        public IEnumerable<string> SortByDescendingTest_StringArrayByOneself(IEnumerable<string> source) =>
+            source.SortByDescending(s => s);
+
+        [TestCase(arg: new int[] { 4, 5, 2, 3, 7 }, ExpectedResult = new int[] { 7, 5, 4, 3, 2 })]
+        [TestCase(
+            arg: new int[] { int.MinValue, 0, -100, int.MaxValue, 100, 100 },
+            ExpectedResult = new int[] { int.MaxValue, 100, 100, 0, -100, int.MinValue })]
+        public IEnumerable<int> SortByDescendingTest_IntegerArrayByOneself(IEnumerable<int> source) =>
+            source.SortByDescending(x => x);
+
         [Test]
-        public void SortByTest_UsingStringLength()
+        public void SortByTest_ByStringLengthAscending_AndShowLazyExecution()
         {
-            IEnumerable<string> actualArray = new string[] { "12", "", "12345", "123", "1234", "1" };
-            var expectedArray = new string[] { "", "1", "12", "123", "1234", "12345" };
-            //IEnumerable<int> keys = 
+            var actualArray = new List<string> { "12", "", "12345", "123", "1234", "1" };
+            var expectedArray = new List<string> { "", "1", "12", "123", "1234", "12345", "123456" };
 
-           // actualArray = actualArray.SortBy(str => str.Length);
-            //IEnumerable<int> GetKeysIterator()
-            //{
-            //    foreach (var item in actualArray)
-            //    {
-            //        yield return key.Invoke(item);
-            //    }
-            //}
+            var temp = actualArray.SortBy(str => str.Length);
+            actualArray.Add("123456");
 
-            CollectionAssert.AreEqual(expectedArray, actualArray.SortBy(str => str.Length));
+            Assert.AreEqual(expectedArray, temp);
         }
+
+        #endregion
+
+        #region Sort by key with comparer
+
+        [TestCase(
+            arg: new string[] { "1267", "222", "2342", "345", "2312222", "vasya" },
+            ExpectedResult = new string[] { "345", "vasya", "1267", "2342", "222", "2312222" })]
+        public IEnumerable<string> SortBy_StringArrayByOneselfUsingNumberOfEntriesComparerAscending(IEnumerable<string> source) =>
+            source.SortBy(s => s, new NumberOfEntriesComparer('2'));
+
+        [TestCase(arg: new int[] { 52, 22, 22222, 72322 }, ExpectedResult = new int[] { 22222, 72322, 22, 52 })]
+        public IEnumerable<int> SortByDescending_IntegerArrayByStringRepresentationUsingNumberOfEntriesComparer(IEnumerable<int> source) =>
+            source.SortByDescending(x => x.ToString(), new NumberOfEntriesComparer('2'));
+
         #endregion
     }
 }

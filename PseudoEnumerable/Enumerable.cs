@@ -83,20 +83,7 @@ namespace PseudoEnumerable
         {
             ValidateArgument(source, key);
 
-            TSource[] buffer = source.ToArray();
-            TKey[] keys = source.GetKeys(key);
-
-            Array.Sort(keys, buffer);
-
-            return buffer;
-
-            //IEnumerable<TKey> GetKeysIterator()
-            //{
-            //    foreach (var item in source)
-            //    {
-            //        yield return key.Invoke(item);
-            //    }
-            //}
+            return new EnumerableSorter<TSource,TKey>(source, key, null, false).GetSortedIterator();
         }
 
         /// <summary>
@@ -112,11 +99,51 @@ namespace PseudoEnumerable
         /// </returns>
         /// <exception cref="ArgumentNullException">Throws if <paramref name="source"/> is null.</exception>
         /// <exception cref="ArgumentNullException">Throws if <paramref name="key"/> is null.</exception>
-        /// <exception cref="ArgumentNullException">Throws if <paramref name="comparer"/> is null.</exception>
         public static IEnumerable<TSource> SortBy<TSource, TKey>(this IEnumerable<TSource> source,
             Func<TSource, TKey> key, IComparer<TKey> comparer)
         {
-            throw new NotImplementedException();
+            ValidateArgument(source, key);
+
+            return new EnumerableSorter<TSource, TKey>(source, key, comparer, false).GetSortedIterator();
+        }
+
+        /// <summary>
+        /// Sorts the elements of a sequence in descending order according to a key.
+        /// </summary>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <typeparam name="TKey">The type of the key returned by key.</typeparam>
+        /// <param name="source">A sequence of values to order.</param>
+        /// <param name="key">A function to extract a key from an element.</param>
+        /// <returns>
+        ///     An <see cref="IEnumerable{TSource}"/> whose elements are sorted according to a key.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">Throws if <paramref name="source"/> is null.</exception>
+        /// <exception cref="ArgumentNullException">Throws if <paramref name="key"/> is null.</exception>
+        public static IEnumerable<TSource> SortByDescending<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey> key)
+        {
+            ValidateArgument(source, key);
+
+            return new EnumerableSorter<TSource, TKey>(source, key, null, true).GetSortedIterator();
+        }
+
+        /// <summary>
+        /// Sorts the elements of a sequence in descending order according by using a specified comparer for a key .
+        /// </summary>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <typeparam name="TKey">The type of the key returned by key.</typeparam>
+        /// <param name="source">A sequence of values to order.</param>
+        /// <param name="key">A function to extract a key from an element.</param>
+        /// <param name="comparer">An <see cref="IComparer{T}"/> to compare keys.</param>
+        /// <returns>
+        ///     An <see cref="IEnumerable{TSource}"/> whose elements are sorted according to a key.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">Throws if <paramref name="source"/> is null.</exception>
+        /// <exception cref="ArgumentNullException">Throws if <paramref name="key"/> is null.</exception>
+        public static IEnumerable<TSource> SortByDescending<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey> key, IComparer<TKey> comparer)
+        {
+            ValidateArgument(source, key);
+
+            return new EnumerableSorter<TSource, TKey>(source, key, comparer, true).GetSortedIterator();
         }
 
         /// <summary>
@@ -129,7 +156,7 @@ namespace PseudoEnumerable
         /// </returns>
         /// <exception cref="ArgumentNullException">Throws if <paramref name="source"/> is null.</exception>
         /// <exception cref="InvalidCastException">An element in the sequence cannot be cast to type TResult.</exception>
-        public static IEnumerable<TResult> CastTo<TResult>(IEnumerable source)
+        public static IEnumerable<TResult> CastTo<TResult>(this IEnumerable source)
         {
             if (source is IEnumerable<TResult> resultSource)
             {
@@ -203,6 +230,92 @@ namespace PseudoEnumerable
             }
         }
 
+        private class EnumerableSorter<TSource, TKey>
+        {
+            private IEnumerable<TSource> source;
+            private Func<TSource, TKey> keySelector;
+            private IComparer<TKey> comparer;
+            private bool descending;
+            private TKey[] keys;
+
+            public EnumerableSorter(
+                IEnumerable<TSource> source,
+                Func<TSource, TKey> keySelector,
+                IComparer<TKey> comparer,
+                bool descending)
+            {
+                this.source = source;
+                this.keySelector = keySelector;
+                this.comparer = comparer ?? Comparer<TKey>.Default;
+                this.descending = descending;
+            }
+
+            public IEnumerable<TSource> GetSortedIterator()
+            {
+                TSource[] arraySource = this.source.ToArray();
+                this.ComputeKeys(arraySource);
+                int[] map = this.GetSortedMap(arraySource);
+                for (int i = 0; i < arraySource.Length; i++)
+                {
+                    yield return arraySource[map[i]];
+                }
+            }
+
+            private void ComputeKeys(TSource[] source)
+            {
+                this.keys = new TKey[source.Length];
+                for (int i = 0; i < source.Length; i++)
+                {
+                    this.keys[i] = this.keySelector.Invoke(source[i]);
+                }
+            }
+
+            private int CompareKeys(int index1, int index2)
+            {
+                int num = comparer.Compare(keys[index1], keys[index2]);
+
+                if (!this.descending)
+                {
+                    return num;
+                }
+
+                return -num;
+            }
+
+            private void SwapKeys(int index1, int index2)
+            {
+                TKey temp = this.keys[index1];
+                this.keys[index1] = this.keys[index2];
+                this.keys[index2] = temp;
+            }
+
+            private int[] GetSortedMap(TSource[] source)
+            {
+                var map = new int[source.Length];
+                for (int i = 0; i < map.Length; i++)
+                {
+                    map[i] = i;
+                }
+
+                int temp;
+                for (int i = 0; i < map.Length - 1; i++)
+                {
+                    for (int j = i + 1; j < map.Length; j++)
+                    {
+                        if (this.CompareKeys(i, j) > 0)
+                        {
+                            SwapKeys(i, j);
+                            temp = map[i];
+                            map[i] = map[j];
+                            map[j] = temp;
+                        }
+                    }
+                }
+
+                return map;
+            }
+        }
+
         private static void ValidateArgument(IEnumerable source, Delegate @delegate)
         {
             if (source is null)
@@ -246,16 +359,14 @@ namespace PseudoEnumerable
             }
             else
             {
-                var tempArray = new TElement[source.Count()];
+                array = new TElement[source.Count()];
                 int i = 0;
                 foreach (var element in source)
                 {
-                    tempArray[i] = element;
+                    array[i] = element;
                     i++;
                 }
 
-                array = new TElement[source.Count()];
-                Array.Copy(tempArray, array, tempArray.Length);
                 return array;
             }
         }
@@ -267,10 +378,18 @@ namespace PseudoEnumerable
                 throw new ArgumentNullException($"{nameof(source)}");
             }
 
-            int count = 0;
-            while (source.GetEnumerator().MoveNext())
+            if (source is ICollection collection)
             {
-                count++;
+                return collection.Count;
+            }
+
+            int count = 0;
+            using (IEnumerator<TSource> iterator = source.GetEnumerator())
+            {
+                while (iterator.MoveNext())
+                {
+                    count++;
+                }
             }
 
             return count;
